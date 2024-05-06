@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fly to a location based on scroll position</title>
+<script src="https://cdn.maptiler.com/maptiler-sdk-js/v2.0.3/maptiler-sdk.umd.js"></script>
+<link href="https://cdn.maptiler.com/maptiler-sdk-js/v2.0.3/maptiler-sdk.css" rel="stylesheet" />
+<style>
+  body {margin: 0; padding: 0;}
+  #map {position: absolute; top: 0; bottom: 0; width: 100%;}
+</style>
+</head>
+<body>
+
+<style>
+    #map {
+        position: fixed;
+        width: 50%;
+    }
+    #features {
+        width: 50%;
+        margin-left: 50%;
+        font-family: sans-serif;
+        overflow-y: scroll;
+        background-color: #fafafa;
+    }
+    section {
+        padding: 25px 50px;
+        line-height: 25px;
+        border-bottom: 1px solid #ddd;
+        opacity: 0.25;
+        font-size: 13px;
+    }
+    section.active {
+        opacity: 1;
+    }
+    section:last-child {
+        border-bottom: none;
+        margin-bottom: 200px;
+    }
+    
+	.logo-container {
+		width: 100%; /* Ajusta el ancho según tus necesidades */
+		text-align: center; /* Alineación de los logos a la derecha */
+	}
+
+	.logo {
+		width: 100px; /* Ajusta el ancho del logo según tus necesidades */
+		margin-left: auto; /* Margen izquierdo automático para centrarlo */
+	}
+
+	.baner {
+        width: 100%;
+    }
+    
+</style>
+
+<div id="map">
+
+    <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+	
+  
+<script>
+    maptilersdk.config.apiKey = 'sfcMpHvW61zRJDeEy9Wb';
+
+    // Función para el mapa 3D
+    const map3D = new maptilersdk.Map({
+        container: 'map',
+        style: maptilersdk.MapStyle.OUTDOOR,
+        center: [-74.0565791, 4.6053703],
+        zoom: 16,
+        pitch: 70,
+        bearing: -100.86,
+        maxPitch: 85,
+        maxZoom: 16,
+        terrain: true,
+        terrainControl: true
+    });
+
+    // Función para el mapa 2D con modelo 3D
+    const map2D = new maptilersdk.Map({
+        container: 'map',
+        style: maptilersdk.MapStyle.STREETS,
+        center: [-74.0800284, 4.638978],
+        zoom: 17,
+        bearing: 15,
+        pitch: 45
+    });
+
+    // Modelo 3D
+    const modelOrigin = [-74.0800284, 4.638978];
+    const modelAltitude = 0;
+    const modelRotate = [Math.PI / 2, 0, 0];
+
+    const modelAsMercatorCoordinate = maptilersdk.MercatorCoordinate.fromLngLat(
+        modelOrigin,
+        modelAltitude
+    );
+
+    const modelTransform = {
+        translateX: modelAsMercatorCoordinate.x,
+        translateY: modelAsMercatorCoordinate.y,
+        translateZ: modelAsMercatorCoordinate.z,
+        rotateX: modelRotate[0],
+        rotateY: modelRotate[1],
+        rotateZ: modelRotate[2],
+        scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits()
+    };
+
+    const THREE = window.THREE;
+
+    const customLayer = {
+        id: '3d-model',
+        type: 'custom',
+        renderingMode: '3d',
+        onAdd: function (map, gl) {
+            this.camera = new THREE.Camera();
+            this.scene = new THREE.Scene();
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff);
+            directionalLight.position.set(0, -70, 100).normalize();
+            this.scene.add(directionalLight);
+
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff);
+            directionalLight2.position.set(0, 70, 100).normalize();
+            this.scene.add(directionalLight2);
+
+            const loader = new THREE.GLTFLoader();
+            loader.load(
+                'https://docs.maptiler.com/sdk-js/assets/34M_17/34M_17.gltf',
+                function (gltf) {
+                    this.scene.add(gltf.scene);
+                }.bind(this)
+            );
+            this.map = map;
+
+            this.renderer = new THREE.WebGLRenderer({
+                canvas: map.getCanvas(),
+                context: gl,
+                antialias: true
+            });
+
+            this.renderer.autoClear = false;
+        },
+        render: function (gl, matrix) {
+            const rotationX = new THREE.Matrix4().makeRotationAxis(
+                new THREE.Vector3(1, 0, 0),
+                modelTransform.rotateX
+            );
+            const rotationY = new THREE.Matrix4().makeRotationAxis(
+                new THREE.Vector3(0, 1, 0),
+                modelTransform.rotateY
+            );
+            const rotationZ = new THREE.Matrix4().makeRotationAxis(
+                new THREE.Vector3(0, 0, 1),
+                modelTransform.rotateZ
+            );
+
+            const m = new THREE.Matrix4().fromArray(matrix);
+            const l = new THREE.Matrix4()
+                .makeTranslation(
+                    modelTransform.translateX,
+                    modelTransform.translateY,
+                    modelTransform.translateZ
+                )
+                .scale(
+                    new THREE.Vector3(
+                        modelTransform.scale,
+                        -modelTransform.scale,
+                        modelTransform.scale
+                    )
+                )
+                .multiply(rotationX)
+                .multiply(rotationY)
+                .multiply(rotationZ);
+
+            this.camera.projectionMatrix = m.multiply(l);
+            this.renderer.state.reset();
+            this.renderer.render(this.scene, this.camera);
+            this.map.triggerRepaint();
+			}
+		};
+
+    map3D.on('style.load', function () {
+        map3D.addLayer(customLayer);
+    });
+</script>
+
+
+
+
+</div>
+
+<div id="features">
+    <section id="baker" class="active">
+	    <div class="banner-header">
+        <!-- Aquí puedes insertar tu banner -->
+        <img src="img/igac.png" alt="Banner de cabecera" class="baner">
+		<h1>DIRECCIÓN DE INVESTIGACIÓN Y PROSPECTIVA</h1>
+    </div>
+        <h2>MODELOS URBANOS 3D y CityGML COMO APOYO AL CATASTRO</h2>
+        <p>
+            La importancia de los modelos urbanos 3D como herramienta de apoyo al catastro y la planificación urbana es innegable. Estos modelos tridimensionales representan una revolución en la manera en que comprendemos y gestionamos nuestro entorno urbano. Permiten una visualización detallada y precisa del paisaje urbano, facilitando la toma de decisiones en la gestión del territorio y el desarrollo urbano. Esta tecnología no solo mejora la precisión del catastro, sino que también abre nuevas posibilidades para la planificación urbana, permitiendo simular escenarios futuros y evaluar su impacto. En resumen, los modelos urbanos 3D tienen un potencial transformador que está redefiniendo la manera en que planificamos y gestionamos nuestras ciudades.
+        </p>
+    </section>
+
+    <section id="lod-citygml">
+        <h3>LoD y CityGML</h3>
+        <p>
+            CityGML es un modelo de datos abierto y basado en XML diseñado para describir modelos tridimensionales de ciudades y paisajes urbanos.
+            Fue desarrollado por el Instituto de Geoinformática de la Universidad de Münster en Alemania.
+            CityGML se utiliza principalmente en aplicaciones de planificación urbana, gestión de recursos naturales, simulaciones urbanas, y visualización 3D, entre otros. Permite la representación de información geoespacial detallada, como edificios, calles, terrenos, infraestructuras, y más, en un formato interoperable y estandarizado.
+
+            Este modelo de datos tiene diferentes niveles de detalle (LOD, por sus siglas en inglés), lo que permite representar objetos con distintos niveles de precisión y complejidad. Esto es útil para diversas aplicaciones que requieren información detallada de la ciudad en diferentes contextos.
+
+            CityGML se ha convertido en un estándar ampliamente utilizado en el campo de la geomática y la planificación urbana debido a su capacidad para integrar datos geoespaciales complejos y facilitar el intercambio de información entre diferentes sistemas y aplicaciones.
+        </p>
+    </section>
+    <section id="lod-catastro">
+        <h3>Niveles de Detalle (LoD) en el Catastro: Importancia y Aplicaciones</h3>
+        <p>
+            Los niveles de detalle (LoD) son esenciales para las evaluaciones constructivas en el catastro, proporcionando diferentes niveles de precisión en la representación de objetos urbanos. Con LoD más altos, obtenemos modelos más precisos y detallados de edificios y estructuras, facilitando la identificación de características relevantes como altura, forma y elementos interiores. Esto ayuda en la valoración de bienes inmuebles y la planificación urbana.
+            A continuación, veremos algunos ejemplos de evaluaciones constructivas para Bogotá, utilizando niveles de detalle (LoD) en modelos urbanos 3D para mejorar la precisión y eficacia del catastro y la planificación urbana.
+        </p>
+    </section>
+    <section id="moviestar-arena">
+        <h3>1. Moviestar Arena</h3>
+        <p>
+            El Movistar Arena Bogotá se destaca como un punto focal en la ciudad de Bogotá, Colombia, no solo por su importancia cultural y de entretenimiento, sino también por su relevancia en los datos urbanos. Este modelo, clasificado como LoD 1, representa el nivel de detalle más bajo en un sistema de múltiples niveles de detalle. En este nivel, se proporciona una representación básica del aspecto físico o visual del recinto, equivalente a aproximadamente el 20% de la cantidad total de información posible.
+        </p>
+    </section>
+    <section id="torre-colpatria">
+        <h3>2. Torre Colpatria</h3>
+        <p>
+            La Torre Colpatria vista como LoD (Nivel de Detalle) proporciona una representación detallada pero básica de la estructura, capturando su forma y altura principal en un modelo tridimensional simplificado. Con sus 50 pisos, es el tercer edificio más alto de la ciudad así como uno de sus iconos urbanos más reconocibles.
+        </p>
+    </section>
+    <section id="gloucester">
+        <h3>3. Basílica del Señor caído de Monserrate</h3>
+        <p>
+            Un santuario católico construido en el siglo XVII, situado en lo alto de una colina a una altitud de 3152 metros sobre el nivel del mar, podría ser representado con diferentes niveles de detalle (LoD) en un modelo tridimensional.
+        </p>
+    </section>
+    <section id="caulfield-gardens">
+        <h3>4. Torre norte -BD BACATÁ</h3>
+        <p>
+            La Torre Norte del complejo BD Bacatá es una impresionante estructura ubicada en Bogotá, Colombia. Con una altura de aproximadamente 240 metros y 66 pisos, es uno de los edificios más altos de la ciudad y de todo el país. Forma parte del complejo BD Bacatá, que incluye la Torre Sur y un centro comercial.
+        </p>
+    </section>
+    <section id="telegraph">
+        <h3>The Daily Telegraph</h3>
+        <p>
+            Holmes and Watson head to The Daily Telegraph and place an ad to
+            draw out the criminal. It reads: "To-night. Same hour. Same place.
+            Two taps. Most vitally important. Your own safety at stake.
+            Pierrot." The trap works and Holmes catches the criminal: Colonel
+            Valentine Walter, the brother of Woolwich Arsenal's chief. He
+            confesses to working for Hugo Oberstein to obtain the submarine
+            plans in order to pay off his debts.
+        </p>
+    </section>
+    <section id="charing-cross">
+        <h3>Charing Cross Hotel</h3>
+        <p>
+            Walter writes to Oberstein and convinces him to meet in the smoking
+            room of the Charing Cross Hotel where he promises additional plans
+            for the submarine in exchange for money. The plan works and Holmes
+            and Watson catch both criminals.
+        </p>
+        <small id="citation">
+            Adapted by GEOWAY para Proyecto de Evaluaciones Constructivas 
+            <a href="https://www.igac.gov.co/el-igac/areas-estrategicas/direccion-de-investigacion-y-prospectiva"
+                >IGAC, 2024</a
+            >
+			<br>©Copyright 2024 - Todos los derechos reservados</br>
+        </small>
+		
+		<div class="logo-container">
+			<img src="img/gw.svg"  class="logo">
+		</div>
+		
+				<div class="logo-container">
+			<img src="img/Logo IGAC 03.svg"  class="logo">
+		</div>
+		
+    </section>
+</div>
+<script>
+    maptilersdk.config.apiKey = 'sfcMpHvW61zRJDeEy9Wb';
+    var map = new maptilersdk.Map({
+        container: 'map',
+        style: maptilersdk.MapStyle.STREETS,
+        center: [-74.0800284, 4.638978],
+        zoom: 17,
+        bearing: 15,
+        pitch: 45
+    });
+
+    var chapters = {
+        'baker': {
+            bearing: 27,
+            center: [-74.0800284, 4.638978],
+            zoom: 15,
+            pitch: 150
+        },
+        'lod-citygml': {
+            duration: 6000,
+            center: [-74.0800284, 4.638978],
+            bearing: 150,
+            zoom: 15,
+            pitch: 0
+        },
+        'lod-catastro': {
+            bearing: 195,
+            center: [-74.0790855, 4.6461419],
+            zoom: 17,
+            speed: 0.6,
+            pitch: 40
+        },
+        'moviestar-arena': {
+            bearing: 310,
+            center: [-74.0767821, 4.6499525],
+            zoom: 17,
+			pitch: 315
+        },
+        'torre-colpatria': {
+            bearing: 45,
+            center: [-74.0705244, 4.6105101],
+            zoom: 17,
+            pitch: 20,
+            speed: 0.5
+        },
+        'gloucester': {
+        center: [-74.0565791, 4.6053703],
+        zoom: 16,
+        pitch: 70,
+        bearing: -100.86,
+        maxPitch: 85,
+        maxZoom: 16,
+        terrain: true,
+        terrainControl: true
+        },
+        'caulfield-gardens': {
+            bearing: 90,
+            center: [-74.0707003, 4.6049802],
+            zoom: 17.3,
+            pitch: 40
+        },
+        'telegraph': {
+            bearing: 90,
+            center: [-74.1160472, 4.6759828],
+            zoom: 14.3,
+            pitch: 20
+        }
+    };
+
+    window.onscroll = function () {
+        var chapterNames = Object.keys(chapters);
+        for (var i = 0; i < chapterNames.length; i++) {
+            var chapterName = chapterNames[i];
+            if (isElementOnScreen(chapterName)) {
+                setActiveChapter(chapterName);
+                break;
+            }
+        }
+    };
+
+    var activeChapterName = 'baker';
+    function setActiveChapter(chapterName) {
+        if (chapterName === activeChapterName) return;
+
+        map.flyTo(chapters[chapterName]);
+
+        document.getElementById(chapterName).setAttribute('class', 'active');
+        document.getElementById(activeChapterName).setAttribute('class', '');
+
+        activeChapterName = chapterName;
+    }
+
+    function isElementOnScreen(id) {
+        var element = document.getElementById(id);
+        var bounds = element.getBoundingClientRect();
+        return bounds.top < window.innerHeight && bounds.bottom > 0;
+    }
+</script>
+
+
+</body>
+</html>
